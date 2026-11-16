@@ -6,6 +6,7 @@
 //   node bin/cli.mjs cube-to-equirect <facesDir> <out.png> [--width 4096] [--height 2048]
 //   node bin/cli.mjs build-sample <outDir> [--size 512] [--source-width 2048]
 //   node bin/cli.mjs info <facesDir>
+//   node bin/cli.mjs verify-reproject [report.json] [--size 96]
 //
 // Every conversion writes/reads a cubemap.json metadata file next to the six
 // face PNGs (or next to the equirect output). See docs/MAPPING.md.
@@ -27,6 +28,12 @@ import {
   renderChartEquirect,
   chartColorAtCubeTexel,
 } from '../src/chart.js';
+import {
+  measureReprojection,
+  evaluateReprojection,
+  REPROJECTION_LIMITS,
+  PROJECTION_IDS,
+} from '../src/reproject.js';
 import { writeManifest, readManifest, FACE_FILES } from '../src/manifest.js';
 
 function fail(message) {
@@ -229,6 +236,52 @@ function buildSampleCommand(args) {
   return 0;
 }
 
+function verifyReprojectCommand(args) {
+  const outFile = args.positional[0] ?? null;
+  const faceSize = Number(args.flags.size ?? 96);
+  if (!Number.isInteger(faceSize) || faceSize < 8) fail('--size must be an integer >= 8');
+  const views = [
+    { yaw: 0, pitch: 0, fovDeg: 75 },
+    { yaw: 2.4, pitch: 0.7, fovDeg: 60 },
+    { yaw: -1.1, pitch: -1.2, fovDeg: 110 },
+  ];
+  const measurements = [];
+  for (const projection of PROJECTION_IDS) {
+    for (const view of views) {
+      measurements.push(measureReprojection({ faceSize, projection, ...view }));
+    }
+  }
+  const verdicts = measurements.map(evaluateReprojection);
+  const report = {
+    format: 'reprojection-verification',
+    limits: REPROJECTION_LIMITS,
+    measurements,
+    verdicts,
+    ok: verdicts.every((v) => v.ok),
+  };
+  if (outFile) {
+    fs.mkdirSync(path.dirname(path.resolve(outFile)), { recursive: true });
+    fs.writeFileSync(outFile, JSON.stringify(report, null, 2) + '\n');
+  }
+  for (let i = 0; i < measurements.length; i++) {
+    const m = measurements[i];
+    const v = verdicts[i];
+    console.log(
+      `${m.projection.padEnd(15)} yaw ${m.settings.yaw.toFixed(2)} pitch ${m.settings.pitch.toFixed(2)} ` +
+        `fov ${m.settings.fovDeg}: direction ${m.direction.maxAngleDeg.toFixed(4)}°, ` +
+        `seam excess ${m.seam.excess.toFixed(4)} (near ${m.seam.maxNearEdgeErr.toFixed(4)}, ` +
+        `interior ${m.seam.maxInteriorErr.toFixed(4)}), seam position ${m.seamPosition.maxRoundTripDeg.toExponential(2)}° -> ${v.ok ? 'ok' : 'FAIL'}`,
+    );
+    for (const reason of v.reasons) console.log(`  ${reason}`);
+  }
+  if (!report.ok) {
+    console.error('reprojection verification failed; see reasons above');
+    return 1;
+  }
+  console.log(`reprojection verification passed${outFile ? `; evidence in ${outFile}` : ''}`);
+  return 0;
+}
+
 function infoCommand(args) {
   const [dir] = args.positional;
   if (!dir) fail('usage: cli.mjs info <facesDir>');
@@ -244,8 +297,9 @@ try {
   else if (command === 'cube-to-equirect') process.exitCode = cubeToEquirectCommand({ positional, flags });
   else if (command === 'build-sample') process.exitCode = buildSampleCommand({ positional, flags });
   else if (command === 'info') process.exitCode = infoCommand({ positional, flags });
+  else if (command === 'verify-reproject') process.exitCode = verifyReprojectCommand({ positional, flags });
   else {
-    console.error('commands: equirect-to-cube | cube-to-equirect | build-sample | info');
+    console.error('commands: equirect-to-cube | cube-to-equirect | build-sample | info | verify-reproject');
     process.exitCode = 1;
   }
 } catch (err) {

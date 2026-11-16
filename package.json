@@ -8,7 +8,9 @@
     "test": "node test/run-tests.mjs",
     "build:sample": "node bin/cli.mjs build-sample output/sample",
     "serve": "node bin/serve.mjs",
-    "verify:web": "node scripts/verify-web.mjs"
+    "verify:web": "node scripts/verify-web.mjs",
+    "verify:reproject": "node bin/cli.mjs verify-reproject output/sample/reprojection-verify.json --size 96",
+    "evidence:boundary": "node scripts/boundary-evidence.mjs test/fixtures/prefix-kernel src output/sample/boundary-evidence.json"
   },
   "engines": {
     "node": ">=20"

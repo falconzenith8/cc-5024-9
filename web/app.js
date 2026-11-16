@@ -3,16 +3,30 @@
 // Every view samples the PNG files written by the converter. The sphere view
 // is the source equirectangular image; the cube net draws the six faces in
 // their stored pixel orientation; the direction map colour-codes the owning
-// face. Pointer clicks locate the same direction everywhere and report both
-// the source pixel and the owning face pixel.
+// face. The overview views mirror geometry from src/geometry.js; the panorama
+// reprojection view is different: it does not reimplement geometry at all.
+// It imports src/reproject.js and src/resample.js directly and renders the
+// stored faces through the repaired cube->equirect kernel, so what the UI
+// shows is the same code path the tests and the CLI verifier exercise.
 //
-// Geometry is mirrored from src/geometry.js (world +X right, +Y up, +Z
-// forward). scripts/verify-web.mjs checks that this copy agrees with the Node
-// module on random directions, so the two cannot silently diverge.
+// Pointer clicks locate the same direction everywhere and report both the
+// source pixel and the owning face pixel.
+
+import {
+  measureReprojection,
+  evaluateReprojection,
+  renderReprojection,
+  projectDirection,
+  rayForPixel,
+  seamPolylines,
+  REPROJECTION_LIMITS,
+} from '../src/reproject.js';
+import { toUint8 } from '../src/resample.js';
 
 const SOURCE_URL = '../output/sample/chart-equirect.png';
 const MANIFEST_URL = '../output/sample/faces/cubemap.json';
 const ROUNDTRIP_URL = '../output/sample/roundtrip.json';
+const REPROJECT_VERIFY_URL = '../output/sample/reprojection-verify.json';
 const CUBE_DIR = '../output/sample/faces/';
 
 const FACES = [
@@ -34,6 +48,8 @@ const HINTS = {
   sphere: 'Equirectangular source. Column 0 is −180° and wraps to +180°; drag to scrub longitude/latitude.',
   cube: 'Stored face PNGs in a cube net. Click a face to locate that direction. Labels are upright in the stored image.',
   map: 'Face ownership of every direction, same projection as the source. Click to locate.',
+  panorama:
+    'Panorama reprojection: the stored faces rendered through the patched cube→equirect kernel. Drag to rotate the view; choose a projection above. Cyan lines are the cube seams projected from geometry.',
 };
 
 const els = {};
@@ -44,14 +60,29 @@ const state = {
   roundtrip: null,
   net: null,
   faces: [],
+  faceFloat: [],
   showGrid: true,
   showFaces: true,
   seamBand: false,
   selected: { theta: 0, phi: 0 },
   dragging: false,
+  dragStart: null,
   sourceRect: null,
   cubeRects: [],
   pointer: null,
+  // Panorama reprojection state. Orientation is in the world frame used by
+  // src/reproject.js (yaw = longitude, pitch = latitude of the view centre).
+  panorama: {
+    projection: 'rectilinear',
+    yaw: 0,
+    pitch: 0,
+    fovDeg: 75,
+    seams: true,
+    canvas: null,
+    lastMeasure: null,
+    lastVerdict: null,
+    running: false,
+  },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -148,11 +179,12 @@ export async function init() {
   els.mainMeta = $('main-meta');
   els.viewHint = $('view-hint');
 
-  const [sourceImg, manifest, roundtrip, net] = await Promise.all([
+  const [sourceImg, manifest, roundtrip, net, reprojectVerify] = await Promise.all([
     loadImage(SOURCE_URL),
     fetch(MANIFEST_URL).then((r) => r.json()),
     fetch(ROUNDTRIP_URL).then((r) => r.json()).catch(() => null),
     fetch(NET_URL).then((r) => r.json()),
+    fetch(REPROJECT_VERIFY_URL).then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
   state.source = {
     width: sourceImg.naturalWidth,
@@ -168,6 +200,7 @@ export async function init() {
     name: f.name,
     canvas: imageToCanvas(faceImgs[i]),
   }));
+  state.faceFloat = state.faces.map((f) => canvasToImageDataF(f.canvas));
 
   if (roundtrip?.metrics) {
     const m = roundtrip.metrics;
@@ -177,6 +210,7 @@ export async function init() {
   bindEvents();
   selectView('sphere');
   resize();
+  if (reprojectVerify) showStoredVerification(reprojectVerify);
   window.__viewerReady = true;
   window.__viewer = {
     state,
@@ -190,7 +224,27 @@ export async function init() {
     dirFromAngles,
     selectView,
     redraw,
+    reprojection: {
+      measure: (opts) => measureReprojection(opts),
+      evaluate: (m) => evaluateReprojection(m),
+      render: () => renderPanorama(),
+      runVerification: (overrides) => runReprojectionVerification(overrides),
+      getSettings: () => ({ ...state.panorama }),
+    },
   };
+}
+
+/** Float copy of a face canvas, for the reprojection kernel. */
+function canvasToImageDataF(canvas) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const d = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = new Float32Array(canvas.width * canvas.height * 3);
+  for (let p = 0; p < canvas.width * canvas.height; p++) {
+    data[p * 3] = d.data[p * 4];
+    data[p * 3 + 1] = d.data[p * 4 + 1];
+    data[p * 3 + 2] = d.data[p * 4 + 2];
+  }
+  return { width: canvas.width, height: canvas.height, channels: 3, data };
 }
 
 function bindEvents() {
@@ -209,23 +263,59 @@ function bindEvents() {
     state.seamBand = e.target.checked;
     redraw();
   });
+  $('reprojection-mode').addEventListener('change', (e) => {
+    state.panorama.projection = e.target.value;
+    state.panorama.yaw = 0;
+    state.panorama.pitch = 0;
+    updatePanoramaChrome();
+    runReprojectionVerification();
+    redraw();
+  });
+  $('toggle-reprojection-seams').addEventListener('change', (e) => {
+    state.panorama.seams = e.target.checked;
+    redraw();
+  });
+  $('rerun-verification').addEventListener('click', () => runReprojectionVerification());
 
   const canvas = els.mainCanvas;
   canvas.addEventListener('pointerdown', (e) => {
     state.dragging = true;
     canvas.setPointerCapture(e.pointerId);
+    if (state.view === 'panorama') {
+      state.dragStart = {
+        clientX: e.clientX,
+        clientY: e.clientY,
+        yaw: state.panorama.yaw,
+        pitch: state.panorama.pitch,
+        moved: false,
+      };
+      return;
+    }
     locateFromEvent(e);
   });
   canvas.addEventListener('pointermove', (e) => {
     state.pointer = { clientX: e.clientX, clientY: e.clientY };
+    if (state.view === 'panorama') {
+      if (state.dragging) panoramaDrag(e);
+      else panoramaReadout(e);
+      return;
+    }
     if (state.dragging) locateFromEvent(e);
     else if (state.view !== 'map') readoutFromEvent(e);
   });
-  canvas.addEventListener('pointerup', () => {
+  canvas.addEventListener('pointerup', (e) => {
+    const panorama = state.view === 'panorama';
+    const moved = panorama && state.dragStart?.moved;
     state.dragging = false;
+    state.dragStart = null;
+    if (panorama && !moved) locateFromEvent(e);
+    // Re-measure the view the user actually reached. The panel is driven by
+    // the kernel, so it cannot keep reporting the previous orientation.
+    if (moved) runReprojectionVerification();
   });
   canvas.addEventListener('pointercancel', () => {
     state.dragging = false;
+    state.dragStart = null;
   });
   window.addEventListener('resize', resize);
 }
@@ -239,12 +329,21 @@ export function selectView(view) {
     btn.setAttribute('aria-pressed', String(btn.dataset.view === view));
   }
   els.viewHint.textContent = HINTS[view];
+  const reprojectSelect = $('reprojection-mode');
+  const seamsToggle = $('toggle-reprojection-seams');
+  if (reprojectSelect) reprojectSelect.disabled = view !== 'panorama';
+  if (seamsToggle) seamsToggle.disabled = view !== 'panorama';
   if (view === 'sphere') {
     els.mainTitle.textContent = `Source equirectangular (${state.source.width}×${state.source.height})`;
     els.mainMeta.textContent = 'column 0 = −180° · wraps to +180°';
   } else if (view === 'cube') {
     els.mainTitle.textContent = 'Cubemap net (stored files)';
     els.mainMeta.textContent = `${state.manifest.mapping.faceSize}² per face`;
+  } else if (view === 'panorama') {
+    updatePanoramaChrome();
+    // Controls drive the kernel: entering the view measures the current
+    // orientation instead of leaving a stored value on screen.
+    if (!state.panorama.lastMeasure) runReprojectionVerification();
   } else {
     els.mainTitle.textContent = 'Direction ownership map';
     els.mainMeta.textContent = 'same projection as the source';
@@ -256,7 +355,8 @@ function resize() {
   if (!els.mainCanvas) return;
   const wrap = els.mainCanvas.parentElement;
   const cssW = Math.max(360, wrap.clientWidth - 20);
-  const cssH = state.view === 'cube' ? Math.round(cssW * 0.62) : Math.round(cssW * 0.5);
+  const cssH =
+    state.view === 'cube' ? Math.round(cssW * 0.62) : state.view === 'panorama' ? Math.round(cssW * 0.5625) : Math.round(cssW * 0.5);
   els.mainCanvas.style.width = `${cssW}px`;
   els.mainCanvas.style.height = `${cssH}px`;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -272,6 +372,7 @@ function redraw() {
   if (!state.source) return;
   if (state.view === 'sphere') drawSphere();
   else if (state.view === 'cube') drawCubeNet();
+  else if (state.view === 'panorama') drawPanorama();
   else drawDirectionMap();
   drawLocator();
 }
@@ -512,6 +613,257 @@ function drawDirectionMap() {
   ctx.restore();
 }
 
+// ---------------------------------------------------------------------------
+// Panorama reprojection
+//
+// This view is rendered by src/reproject.js on the float face data, i.e. by the
+// same kernel cube->equirect uses. Seam lines are projected from the cube edge
+// geometry through the same camera model, so their positions are computed, not
+// drawn by hand over a fixed image.
+
+function renderPanorama() {
+  const p = state.panorama;
+  const cw = els.mainCanvas.width;
+  const ch = els.mainCanvas.height;
+  if (!state.faceFloat.length || cw === 0 || ch === 0) return null;
+  // Interactive frames are rendered at a capped resolution: the projection
+  // and sampler are identical, only the output grid is coarser, so a drag
+  // still shows the patched kernel without a multi-second frame.
+  const scale = Math.min(1, (state.dragging ? 480 : 960) / cw);
+  const rw = Math.max(2, Math.round(cw * scale));
+  const rh = Math.max(2, Math.round(ch * scale));
+  const img = renderReprojection(state.faceFloat, {
+    projection: p.projection,
+    width: rw,
+    height: rh,
+    yaw: p.yaw,
+    pitch: p.pitch,
+    fovDeg: p.fovDeg,
+  });
+  const u8 = toUint8(img);
+  const canvas = document.createElement('canvas');
+  canvas.width = rw;
+  canvas.height = rh;
+  const ctx = canvas.getContext('2d');
+  const id = ctx.createImageData(rw, rh);
+  for (let i = 0, j = 0; i < u8.data.length; i += 3, j += 4) {
+    id.data[j] = u8.data[i];
+    id.data[j + 1] = u8.data[i + 1];
+    id.data[j + 2] = u8.data[i + 2];
+    id.data[j + 3] = 255;
+  }
+  ctx.putImageData(id, 0, 0);
+  p.canvas = canvas;
+  return canvas;
+}
+
+function drawPanorama() {
+  const p = state.panorama;
+  const ctx = els.mainCanvas.getContext('2d');
+  const cw = els.mainCanvas.width;
+  const ch = els.mainCanvas.height;
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#05070a';
+  ctx.fillRect(0, 0, cw, ch);
+  const rendered = renderPanorama();
+  if (rendered) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(rendered, 0, 0, cw, ch);
+    ctx.imageSmoothingEnabled = false;
+  }
+  state.sourceRect = { ox: 0, oy: 0, dw: cw, dh: ch };
+  state.cubeRects = [];
+
+  if (p.seams) drawPanoramaSeams(ctx, cw, ch);
+
+  // Crosshair at the look direction.
+  const centre = projectDirectionLocal(
+    [Math.cos(p.pitch) * Math.sin(p.yaw), Math.sin(p.pitch), Math.cos(p.pitch) * Math.cos(p.yaw)],
+    cw,
+    ch,
+  );
+  if (centre) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = Math.max(1.5, cw / 900);
+    ctx.beginPath();
+    ctx.arc(centre.px, centre.py, Math.max(6, cw / 160), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function panoramaView() {
+  const p = state.panorama;
+  return { yaw: p.yaw, pitch: p.pitch, fovDeg: p.fovDeg };
+}
+
+function updatePanoramaChrome() {
+  const p = state.panorama;
+  const label = p.projection === 'rectilinear' ? 'Rectilinear' : 'Equirectangular';
+  els.mainTitle.textContent = `Panorama reprojection · ${label}`;
+  const RAD = 180 / Math.PI;
+  els.mainMeta.textContent =
+    `${state.manifest.mapping.faceSize}² faces · yaw ${(p.yaw * RAD).toFixed(1)}° · ` +
+    `pitch ${(p.pitch * RAD).toFixed(1)}°`;
+}
+
+function drawPanoramaSeams(ctx, cw, ch) {
+  const p = state.panorama;
+  const view = panoramaView();
+  ctx.save();
+  ctx.lineWidth = Math.max(1.6, cw / 800);
+  ctx.lineCap = 'round';
+  for (const line of seamPolylines()) {
+    const pts = [];
+    for (const dir of line.dirs) {
+      const q = projectDirection(p.projection, dir, cw, ch, view);
+      if (!q.visible || !q.inFrame) {
+        pts.push(null);
+        continue;
+      }
+      // Equirectangular seam polylines can wrap across the image edge; break
+      // them there instead of drawing a line across the whole panorama.
+      const prev = pts[pts.length - 1];
+      if (prev && p.projection === 'equirectangular' && Math.abs(q.px - prev.px) > cw * 0.5) pts.push(null);
+      pts.push(q);
+    }
+    for (const [colour, width] of [
+      ['rgba(0,0,0,0.65)', ctx.lineWidth + 2],
+      ['rgba(0,255,210,0.95)', ctx.lineWidth],
+    ]) {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      let pen = false;
+      for (const q of pts) {
+        if (!q) {
+          pen = false;
+          continue;
+        }
+        if (!pen) {
+          ctx.moveTo(q.px, q.py);
+          pen = true;
+        } else {
+          ctx.lineTo(q.px, q.py);
+        }
+      }
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function projectDirectionLocal(dir, cw, ch) {
+  const r = projectDirection(state.panorama.projection, dir, cw, ch, panoramaView());
+  return r.visible && r.inFrame ? r : null;
+}
+
+// --- Verification panel ----------------------------------------------------
+
+/** Report a measurement without ever substituting a default pass. */
+function renderVerification(measurement, verdict, sourceLabel) {
+  const status = $('reprojection-status');
+  const ok = Boolean(verdict && verdict.ok);
+  status.classList.toggle('pass', ok);
+  status.classList.toggle('fail', !ok);
+  if (measurement) {
+    const RAD = 180 / Math.PI;
+    status.textContent = ok
+      ? `${sourceLabel}: PASS`
+      : `${sourceLabel}: FAIL — ${verdict.reasons.join('; ')}`;
+    $('verify-projection').textContent =
+      `${measurement.projection} · fov ${measurement.settings.fovDeg.toFixed(0)}°`;
+    $('verify-direction').textContent =
+      `${measurement.direction.maxAngleDeg.toFixed(4)}° max over ${measurement.direction.pixels} rays ` +
+      `(limit ${REPROJECTION_LIMIT_TEXT.direction}°)`;
+    $('verify-seam').textContent =
+      `${measurement.seam.excess.toFixed(4)} excess · near edge ${measurement.seam.maxNearEdgeErr.toFixed(4)}, ` +
+      `interior ${measurement.seam.maxInteriorErr.toFixed(4)} (limit ${REPROJECTION_LIMIT_TEXT.seam})`;
+    $('verify-seam-position').textContent =
+      `${measurement.seamPosition.maxRoundTripDeg.toExponential(2)}° over ${measurement.seamPosition.points} points ` +
+      `(limit ${REPROJECTION_LIMIT_TEXT.seamPosition}°)`;
+    $('verify-view').textContent =
+      `yaw ${(measurement.settings.yaw * RAD).toFixed(2)}° · pitch ${(measurement.settings.pitch * RAD).toFixed(2)}° · ` +
+      `${measurement.settings.probeWidth}×${measurement.settings.probeHeight} probe · ${measurement.faceSize}² faces`;
+  } else {
+    status.textContent = `${sourceLabel}: FAIL — ${verdict.reasons.join('; ')}`;
+    for (const id of ['verify-projection', 'verify-direction', 'verify-seam', 'verify-seam-position', 'verify-view']) {
+      $(id).textContent = '—';
+    }
+  }
+  state.panorama.lastVerdict = verdict;
+  if (state.view === 'panorama') redraw();
+}
+
+const REPROJECTION_LIMIT_TEXT = {
+  direction: String(REPROJECTION_LIMITS.maxDirectionErrorDeg),
+  seam: String(REPROJECTION_LIMITS.maxSeamExcess),
+  seamPosition: String(REPROJECTION_LIMITS.maxSeamPositionErrorDeg),
+};
+
+/** Show the JSON evidence written by `cli.mjs verify-reproject`. */
+function showStoredVerification(report) {
+  const p = state.panorama;
+  const match = report.measurements?.find(
+    (m) =>
+      m.projection === p.projection &&
+      Math.abs(m.settings.yaw - p.yaw) < 1e-9 &&
+      Math.abs(m.settings.pitch - p.pitch) < 1e-9,
+  );
+  if (match) {
+    const index = report.measurements.indexOf(match);
+    renderVerification(match, report.verdicts[index], 'stored evidence');
+    return;
+  }
+  const failed = (report.verdicts ?? []).filter((v) => !v.ok).length;
+  state.panorama.lastVerdict = report.ok
+    ? { ok: false, reasons: ['no stored measurement matches this view'] }
+    : { ok: false, reasons: ['stored evidence contains failures'] };
+  $('reprojection-status').classList.remove('pass', 'fail');
+  if (!report.ok) $('reprojection-status').classList.add('fail');
+  $('reprojection-status').textContent = report.ok
+    ? `stored evidence: no run matches this view yet — press Run verification again`
+    : `stored evidence: ${failed}/${report.verdicts.length} runs FAILED`;
+  if (state.view === 'panorama') redraw();
+}
+
+/** Recompute the measurement for the current controls, live, from the kernel. */
+function runReprojectionVerification(overrides = {}) {
+  const p = state.panorama;
+  if (p.running) return;
+  p.running = true;
+  const status = $('reprojection-status');
+  status.classList.remove('pass', 'fail');
+  status.textContent = 'running…';
+  try {
+    const measurement = measureReprojection({
+      faceSize: state.manifest.mapping.faceSize,
+      projection: p.projection,
+      yaw: p.yaw,
+      pitch: p.pitch,
+      fovDeg: p.fovDeg,
+      ...overrides,
+    });
+    const verdict = evaluateReprojection(measurement);
+    p.lastMeasure = measurement;
+    renderVerification(measurement, verdict, 'live');
+  } catch (err) {
+    p.lastMeasure = null;
+    p.lastVerdict = { ok: false, reasons: [err.message] };
+    const el = $('reprojection-status');
+    el.classList.remove('pass');
+    el.classList.add('fail');
+    el.textContent = `live: FAIL — ${err.message}`;
+    for (const id of ['verify-projection', 'verify-direction', 'verify-seam', 'verify-seam-position', 'verify-view']) {
+      $(id).textContent = '—';
+    }
+  } finally {
+    p.running = false;
+  }
+}
+
+
 function drawLocator() {
   const ctx = els.inspectorCanvas.getContext('2d');
   const sw = els.inspectorCanvas.width;
@@ -580,6 +932,10 @@ function locateFromEvent(evt) {
     const theta = ((x - r.ox) / r.dw) * 2 * Math.PI - Math.PI;
     const phi = Math.PI / 2 - ((y - r.oy) / r.dh) * Math.PI;
     next = { theta, phi };
+  } else if (state.view === 'panorama') {
+    const dir = panoramaRayAt(x, y);
+    if (!dir) return;
+    next = anglesFromDir(...dir);
   } else {
     for (const r of state.cubeRects) {
       if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) {
@@ -593,6 +949,47 @@ function locateFromEvent(evt) {
   state.selected = next;
   redraw();
   updateReadout(next);
+}
+
+/** Direction under a panorama pixel, using the same camera model as the view. */
+function panoramaRayAt(x, y) {
+  const cw = els.mainCanvas.width;
+  const ch = els.mainCanvas.height;
+  if (x < 0 || x > cw || y < 0 || y > ch) return null;
+  return rayForPixel(state.panorama.projection, x - 0.5, y - 0.5, cw, ch, panoramaView());
+}
+
+function panoramaReadout(evt) {
+  const { x, y } = canvasPoint(evt);
+  const dir = panoramaRayAt(x, y);
+  if (!dir) return;
+  updateReadout(anglesFromDir(...dir));
+}
+
+/**
+ * Drag to orbit. The sensitivity is per output pixel, so a drag moves the
+ * picture with the pointer rather than by a guessed constant. The verification
+ * panel re-runs on pointerup, driven by the resulting yaw/pitch.
+ */
+function panoramaDrag(evt) {
+  const start = state.dragStart;
+  if (!start) return;
+  const dpr = els.mainCanvas.width / els.mainCanvas.getBoundingClientRect().width;
+  const dx = (evt.clientX - start.clientX) / dpr;
+  const dy = (evt.clientY - start.clientY) / dpr;
+  const p = state.panorama;
+  if (p.projection === 'rectilinear') {
+    const span = (p.fovDeg * Math.PI) / 180;
+    p.yaw = start.yaw - (dx / els.mainCanvas.width) * span;
+    p.pitch = clamp(start.pitch + (dy / els.mainCanvas.height) * span, -Math.PI / 2, Math.PI / 2);
+  } else {
+    p.yaw = start.yaw + (dx / els.mainCanvas.width) * 2 * Math.PI;
+    p.pitch = clamp(start.pitch + (dy / els.mainCanvas.height) * Math.PI, -Math.PI / 2, Math.PI / 2);
+  }
+  p.yaw = ((p.yaw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+  if (Math.hypot(dx, dy) > 1) start.moved = true;
+  updatePanoramaChrome();
+  redraw();
 }
 
 function readoutFromEvent(evt) {

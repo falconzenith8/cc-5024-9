@@ -227,6 +227,243 @@ try {
   await page.screenshot({ path: path.join(shots, 'view-sphere-seam.png') });
   await page.uncheck('#toggle-seams');
 
+  // ---------------------------------------------------------------------
+  // Panorama reprojection: the view, its controls and the verification panel
+  // all run on src/reproject.js + src/resample.js in the page.
+
+  await page.click('[data-view="panorama"]');
+  await page.waitForFunction(
+    () => document.getElementById('reprojection-status')?.textContent.startsWith('live:'),
+    null,
+    { timeout: 20000 },
+  );
+
+  const pano = await page.evaluate(() => ({
+    status: document.getElementById('reprojection-status').textContent,
+    pass: document.getElementById('reprojection-status').classList.contains('pass'),
+    fail: document.getElementById('reprojection-status').classList.contains('fail'),
+    projection: document.getElementById('verify-projection').textContent,
+    direction: document.getElementById('verify-direction').textContent,
+    seam: document.getElementById('verify-seam').textContent,
+    seamPosition: document.getElementById('verify-seam-position').textContent,
+    view: document.getElementById('verify-view').textContent,
+    title: document.getElementById('main-title').textContent,
+    selectEnabled: !document.getElementById('reprojection-mode').disabled,
+    settings: window.__viewer.state.panorama,
+    verdict: window.__viewer.state.panorama.lastVerdict,
+    measurement: window.__viewer.state.panorama.lastMeasure,
+  }));
+  check('panorama view runs the kernel and passes', () => {
+    assert.ok(pano.pass && !pano.fail, pano.status);
+    assert.equal(pano.verdict.ok, true);
+  });
+  check('verification reports absolute measured values, not blanks', () => {
+    assert.match(pano.direction, /^\d+\.\d+° max over \d+ rays/);
+    assert.match(pano.seam, /-?\d+\.\d+ excess/);
+    assert.match(pano.seamPosition, /° over \d+ points/);
+    assert.match(pano.view, /yaw 0\.00° · pitch 0\.00°/);
+    assert.ok(Number.isFinite(pano.measurement?.direction.maxAngleDeg));
+    assert.ok(pano.measurement?.seamPosition.points > 0);
+  });
+  check('projection control is active only in the panorama view', () => assert.equal(pano.selectEnabled, true));
+
+  // The rendered picture must be the cubemap kernel's output, pixel for pixel,
+  // and it must read the stored faces (not the source PNG).
+  const renderCheck = await page.evaluate(async () => {
+    const { sampleCubeDirection } = await import('/src/resample.js');
+    const { rayForPixel } = await import('/src/reproject.js');
+    const v = window.__viewer;
+    const p = v.state.panorama;
+    const img = v.reprojection.render();
+    const ctx = img.getContext('2d');
+    const px = ctx.getImageData(0, 0, img.width, img.height).data;
+    let worst = 0;
+    let samples = 0;
+    for (const [x, y] of [[8, 8], [img.width >> 1, img.height >> 1], [img.width - 9, img.height >> 1], [img.width >> 2, img.height - 9]]) {
+      const dir = rayForPixel(p.projection, x + 0.5, y + 0.5, img.width, img.height, {
+        yaw: p.yaw,
+        pitch: p.pitch,
+        fovDeg: p.fovDeg,
+      });
+      const want = sampleCubeDirection(v.state.faceFloat, ...dir);
+      const o = (y * img.width + x) * 4;
+      for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(px[o + c] - want[c]));
+      samples++;
+    }
+    // The view centre at yaw=0/pitch=0 looks along +Z, so the centre pixel
+    // must equal the sampled stored +Z face, not a shim.
+    const centre = rayForPixel(p.projection, img.width / 2, img.height / 2, img.width, img.height, {
+      yaw: p.yaw,
+      pitch: p.pitch,
+      fovDeg: p.fovDeg,
+    });
+    const faceTap = sampleCubeDirection(v.state.faceFloat, ...centre);
+    const co = ((img.height >> 1) * img.width + (img.width >> 1)) * 4;
+    let centreDiff = 0;
+    for (let c = 0; c < 3; c++) centreDiff = Math.max(centreDiff, Math.abs(px[co + c] - faceTap[c]));
+    return { worst, samples, centreDiff };
+  });
+  check('panorama pixels are sampleCubeDirection output', () => {
+    assert.ok(renderCheck.samples === 4, `${renderCheck.samples} samples`);
+    assert.ok(renderCheck.worst <= 1.0, `max channel diff ${renderCheck.worst}`);
+    assert.ok(renderCheck.centreDiff <= 1.0, `centre differs from stored cube sample by ${renderCheck.centreDiff}`);
+  });
+
+  // Rotating the view must change the rendered picture (proof that the drawn
+  // sphere is recomputed, not a static copy of the source).
+  const frames = await page.evaluate(async () => {
+    const v = window.__viewer;
+    const a = v.reprojection.render();
+    const aData = a.getContext('2d').getImageData(0, 0, a.width, a.height).data;
+    const savedYaw = v.state.panorama.yaw;
+    // A non-right-angle turn: the chart is symmetric under 90° rotations, so a
+    // quarter turn would legitimately leave much of the picture unchanged.
+    v.state.panorama.yaw = savedYaw + 0.3;
+    v.redraw();
+    const b = v.reprojection.render();
+    const bData = b.getContext('2d').getImageData(0, 0, b.width, b.height).data;
+    let diff = 0;
+    for (let i = 0; i < aData.length; i += 4) {
+      if (Math.abs(aData[i] - bData[i]) + Math.abs(aData[i + 1] - bData[i + 1]) + Math.abs(aData[i + 2] - bData[i + 2]) > 12) diff++;
+    }
+    v.state.panorama.yaw = savedYaw;
+    v.redraw();
+    return { changed: diff, total: aData.length / 4 };
+  });
+  check('rotating the view re-renders the sphere picture', () =>
+    assert.ok(frames.changed > frames.total * 0.3, `only ${frames.changed}/${frames.total} pixels changed`),
+  );
+
+  // Seam lines are drawn from seamPolylines() projected through the kernel.
+  const seamCheck = await page.evaluate(async () => {
+    const { seamPolylines, projectDirection } = await import('/src/reproject.js');
+    const v = window.__viewer;
+    const p = v.state.panorama;
+    const c = document.getElementById('main-canvas');
+    const ctx = c.getContext('2d');
+    const d = ctx.getImageData(0, 0, c.width, c.height).data;
+    let found = 0;
+    let checked = 0;
+    for (const line of seamPolylines()) {
+      for (const dir of line.dirs) {
+        const q = projectDirection(p.projection, dir, c.width, c.height, {
+          yaw: p.yaw,
+          pitch: p.pitch,
+          fovDeg: p.fovDeg,
+        });
+        if (!q.visible || !q.inFrame || q.px < 4 || q.px > c.width - 5 || q.py < 4 || q.py > c.height - 5) continue;
+        checked++;
+        let hit = false;
+        for (let oy = -3; oy <= 3 && !hit; oy++) {
+          for (let ox = -3; ox <= 3 && !hit; ox++) {
+            const o = ((Math.round(q.py) + oy) * c.width + Math.round(q.px) + ox) * 4;
+            // The overlay is cyan-green with a dark outline, distinct from the
+            // chart's orange equator and yellow prime meridian.
+            if (d[o] < 90 && d[o + 1] > 200 && d[o + 2] > 150) hit = true;
+          }
+        }
+        if (hit) found++;
+      }
+    }
+    return { checked, found };
+  });
+  check('seam overlay lands where projectDirection puts the cube edges', () => {
+    assert.ok(seamCheck.checked > 0, 'no seam points in frame');
+    assert.ok(seamCheck.found / seamCheck.checked > 0.6, `${seamCheck.found}/${seamCheck.checked} seam points have overlay pixels`);
+  });
+  await page.screenshot({ path: path.join(shots, 'view-panorama.png') });
+
+  // Dragging rotates the view, re-renders and re-measures at the new yaw.
+  const canvasBox = await page.locator('#main-canvas').boundingBox();
+  await page.mouse.move(canvasBox.x + canvasBox.width * 0.5, canvasBox.y + canvasBox.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(canvasBox.x + canvasBox.width * 0.7, canvasBox.y + canvasBox.height * 0.58, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForFunction(() => {
+    const s = window.__viewer.state.panorama;
+    return s.lastMeasure && Math.abs(s.lastMeasure.settings.yaw - s.yaw) < 1e-9;
+  }, null, { timeout: 20000 });
+  const rotated = await page.evaluate(() => {
+    const s = window.__viewer.state.panorama;
+    return {
+      yaw: s.yaw,
+      pitch: s.pitch,
+      measuredYaw: s.lastMeasure.settings.yaw,
+      measuredPitch: s.lastMeasure.settings.pitch,
+      status: document.getElementById('reprojection-status').textContent,
+      pass: document.getElementById('reprojection-status').classList.contains('pass'),
+      view: document.getElementById('verify-view').textContent,
+    };
+  });
+  check('dragging rotates the panorama view', () => assert.ok(Math.abs(rotated.yaw) > 0.05, `yaw ${rotated.yaw}`));
+  check('verification re-runs at the rotated orientation', () => {
+    assert.ok(Math.abs(rotated.measuredYaw - rotated.yaw) < 1e-9);
+    assert.ok(Math.abs(rotated.measuredPitch - rotated.pitch) < 1e-9);
+    // The panel prints degrees; the state stores radians (signed by drag).
+    assert.match(rotated.view, new RegExp(`yaw ${((rotated.yaw * 180) / Math.PI).toFixed(2)}°`));
+    assert.match(rotated.view, new RegExp(`pitch ${((rotated.pitch * 180) / Math.PI).toFixed(2)}°`));
+  });
+  check('rotated view still passes', () => assert.ok(rotated.pass, rotated.status));
+  await page.screenshot({ path: path.join(shots, 'view-panorama-rotated.png') });
+
+  // Switching projection re-renders and re-measures through the same kernel.
+  await page.selectOption('#reprojection-mode', 'equirectangular');
+  await page.waitForFunction(() => {
+    const s = window.__viewer.state.panorama;
+    return s.projection === 'equirectangular' && s.lastMeasure?.projection === 'equirectangular';
+  }, null, { timeout: 20000 });
+  const equirect = await page.evaluate(() => ({
+    status: document.getElementById('reprojection-status').textContent,
+    pass: document.getElementById('reprojection-status').classList.contains('pass'),
+    title: document.getElementById('main-title').textContent,
+    projection: document.getElementById('verify-projection').textContent,
+    yaw: window.__viewer.state.panorama.yaw,
+    pitch: window.__viewer.state.panorama.pitch,
+  }));
+  check('equirectangular projection is measured, not reused', () => {
+    assert.match(equirect.projection, /^equirectangular/);
+    assert.match(equirect.title, /Equirectangular/);
+    assert.ok(equirect.pass, equirect.status);
+    assert.equal(equirect.yaw, 0);
+    assert.equal(equirect.pitch, 0);
+  });
+  await page.screenshot({ path: path.join(shots, 'view-panorama-equirect.png') });
+
+  // Failure feedback: a broken measurement must surface as FAIL, never as a
+  // default pass. Inject a non-finite orientation, run, then recover.
+  const injected = await page.evaluate(() => {
+    const v = window.__viewer;
+    v.reprojection.runVerification({ yaw: NaN });
+    const el = document.getElementById('reprojection-status');
+    const result = {
+      text: el.textContent,
+      fail: el.classList.contains('fail'),
+      pass: el.classList.contains('pass'),
+      verdict: v.state.panorama.lastVerdict,
+      measurement: v.state.panorama.lastMeasure,
+    };
+    v.reprojection.runVerification();
+    result.recovered = {
+      pass: el.classList.contains('pass'),
+      text: el.textContent,
+      verdict: v.state.panorama.lastVerdict,
+    };
+    return result;
+  });
+  check('a failed measurement is shown as FAIL, not defaulted', () => {
+    assert.equal(injected.fail, true, injected.text);
+    assert.equal(injected.pass, false);
+    assert.equal(injected.verdict.ok, false);
+    assert.equal(injected.measurement, null);
+    assert.match(injected.text, /live: FAIL/);
+  });
+  check('the panel recovers after the injected failure is removed', () => {
+    assert.equal(injected.recovered.pass, true, injected.recovered.text);
+    assert.equal(injected.recovered.verdict.ok, true);
+  });
+
+  check('no console errors after panorama checks', () => assert.deepEqual(consoleErrors, []));
+
   await page.screenshot({ path: path.join(shots, 'view-sphere-located.png') });
 } finally {
   await browser.close();

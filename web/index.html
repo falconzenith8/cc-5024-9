@@ -22,8 +22,17 @@
           <button data-view="sphere" type="button" aria-pressed="true">Sphere (equirect)</button>
           <button data-view="cube" type="button" aria-pressed="false">Cube net</button>
           <button data-view="map" type="button" aria-pressed="false">Direction map</button>
+          <button data-view="panorama" type="button" aria-pressed="false">Panorama reprojection</button>
         </div>
       </div>
+      <div class="control-group">
+        <span class="label">Reprojection</span>
+        <select id="reprojection-mode" aria-label="Reprojection projection">
+          <option value="rectilinear">Rectilinear (perspective)</option>
+          <option value="equirectangular">Equirectangular</option>
+        </select>
+      </div>
+      <label class="check"><input type="checkbox" id="toggle-reprojection-seams" checked /> Seam lines</label>
       <label class="check"><input type="checkbox" id="toggle-grid" checked /> Graticule</label>
       <label class="check"><input type="checkbox" id="toggle-faces" checked /> Face edges</label>
       <label class="check"><input type="checkbox" id="toggle-seams" /> Seam band</label>
@@ -78,7 +87,31 @@
             <p>
               The Sphere view is the actual source PNG. The Cube net shows the six PNG files in
               stored orientation; the Direction map colours each direction by the face that owns it.
-              No view uses a hand-drawn substitute for the projection.
+              Panorama reprojection samples the same stored faces through the patched
+              cube→equirect kernel, so the sphere picture and its seam lines come from the
+              repaired geometry, not a view-only shader.
+            </p>
+          </div>
+        </section>
+
+        <section class="canvas-panel">
+          <div class="panel-head">
+            <h2>Reprojection verification</h2>
+            <span class="meta">direction-known</span>
+          </div>
+          <div class="verify-body">
+            <div id="reprojection-status" class="verify-status" aria-live="polite">not run</div>
+            <dl>
+              <dt>Projection</dt><dd id="verify-projection">—</dd>
+              <dt>Direction error</dt><dd id="verify-direction">—</dd>
+              <dt>Seam difference</dt><dd id="verify-seam">—</dd>
+              <dt>Seam position</dt><dd id="verify-seam-position">—</dd>
+              <dt>View</dt><dd id="verify-view">—</dd>
+            </dl>
+            <button id="rerun-verification" type="button" class="run-button">Run verification again</button>
+            <p class="verify-note">
+              Rendered from a direction-encoded cubemap through the same kernel the view uses.
+              Limits are absolute; a failure is shown, never hidden behind a default.
             </p>
           </div>
         </section>

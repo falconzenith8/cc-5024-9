@@ -128,11 +128,53 @@ aliasing where one cube texel covers many source columns.
 
 Every output pixel estimates its footprint in cube texels from the direction
 Jacobian and averages a stratified grid of directions over the pixel cell.
-Each direction is sampled bilinearly from the owning face. Within one texel
-of a face edge, the sampler blends the projections onto both faces, weighted
-by distance from the edge, so a reconstructed panorama is continuous across
-cube seams instead of showing a hard step. The supersample count is derived
-from the row's worst-case footprint (capped by `--maxSamples`, default 6).
+Each direction is sampled **bilinearly through an extension grid**: the four
+stencil taps are computed in the owning face's pixel coordinates, and any tap
+that falls outside the face is re-projected onto the neighbouring face with
+`dirToFaceUV` and bilinearly sampled there. The two faces are therefore
+blended by construction across a shared edge, so a reconstructed panorama is
+continuous instead of showing a hard step; no edge column is copied to mask
+the seam. The supersample count is derived from the row's worst-case
+footprint (capped by `--maxSamples`, default 6).
+
+The area filter's polar handling is equally explicit. The `±Y` texel at the
+pole covers all longitudes; its footprint is extended to the pole row so the
+polar cap is not dropped, and a degenerate pole vertex (`atan2(0,0)`) is
+unwrapped against its neighbouring non-polar vertices so a quarter-ring wedge
+is not folded into a 90–180° span. These cases are pinned by
+`test/boundary.test.mjs`.
+
+## 5b. Panorama reprojection
+
+`src/reproject.js` renders the faces under a selectable camera without adding
+a second sampling implementation: every output pixel becomes a unit direction
+and is passed to `sampleCubeDirection`, i.e. the repaired cube→equirect
+kernel above. Two projections are defined:
+
+- **rectilinear** — `C = anglesToDir(yaw, pitch)`, `R = normalize(cross(+Y, C))`,
+  `U = cross(C, R)`, `focal = 1/tan(fov/2)`. The centre ray is exactly `C`
+  and the vertical fov spans `fov` between edge rays.
+- **equirectangular** — `lon = -pi + 2*pi*(px+0.5)/W + yaw`,
+  `lat = clamp(pi/2 - pi*(py+0.5)/H + pitch, ∓pi/2)`; latitude clamps at the
+  poles rather than overflowing.
+
+The 12 seam polylines are the geometry edge table sampled in direction space
+and projected with the same `projectDirection` used for the overlay, so a
+drawn seam cannot drift from the rendered sphere. `measureReprojection`
+reports three absolute quantities:
+
+| metric | definition | limit |
+| ------ | ---------- | ----- |
+| direction error | max angle between the decoded direction of a direction-encoded cubemap pixel and the requested ray | 0.1° |
+| seam difference | worst error within 1.5 texels of a cube edge minus the interior error | 0.12 |
+| seam position | max round-trip angle of a projected seam point | 0.001° |
+
+A measurement that is non-finite or has no seam in view throws; the CLI and
+the web panel surface that as a failure. The limits are not per-run defaults:
+the pre-fix kernel produces direction error up to 0.29° and seam excess
+≈0.3, which trips them, while the repaired kernel stays below 0.03° and
+0.05. Evidence runs are written to `output/sample/reprojection-verify.json`
+by `npm run verify:reproject`.
 
 ## 6. Resampling loss (quantified)
 
@@ -208,8 +250,31 @@ node bin/cli.mjs equirect-to-cube <input.png> <outDir> --size N [--filter area|b
 node bin/cli.mjs cube-to-equirect <facesDir> <out.png> [--width W] [--height H] [--maxSamples S]
 node bin/cli.mjs build-sample <outDir> [--size N] [--source-width W]
 node bin/cli.mjs info <facesDir>
+node bin/cli.mjs verify-reproject [report.json] [--size N]
 
-npm test          # geometry, filtering, seams, round-trip, PNG, net, manifest
-npm run serve     # viewer at http://localhost:4173/web/
+npm test          # geometry, filtering, seams, boundaries, round-trip, PNG, net, manifest
+npm run serve     # viewer at http://localhost:4173/web/  (Panorama reprojection view)
 npm run verify:web  # headless-browser acceptance checks
+npm run verify:reproject  # writes output/sample/reprojection-verify.json
+npm run evidence:boundary # before/after probes -> output/sample/boundary-evidence.json
 ```
+
+`output/sample/reprojection-prefix-failure.json` is the same six-view
+verification run against the pre-fix kernel (`test/fixtures/prefix-kernel`).
+All six runs fail the absolute limits; it is kept as failure evidence and is
+never overwritten by a successful run.
+
+### Launching the UI
+
+`npm run serve` starts a dependency-free static server on port 4173. Open
+`http://localhost:4173/web/`, then:
+
+1. Click **Panorama reprojection** in the View group.
+2. Drag on the image to rotate (rectilinear) or pan (equirectangular).
+3. Choose **Rectilinear** or **Equirectangular** in the Reprojection select.
+4. Read **Reprojection verification** on the right: it re-runs the kernel on
+   every orientation and projection change and shows the measured direction
+   error, seam difference and seam-position error, or FAIL with the reason.
+
+There is no build step; the page loads `src/*.js` as ES modules directly.
+

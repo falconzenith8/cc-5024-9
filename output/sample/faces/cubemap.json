@@ -2,7 +2,7 @@
   "version": 1,
   "format": "cubemap-faces",
   "direction": "equirect-to-cube",
-  "createdAt": "2026-11-16T06:00:08.833Z",
+  "createdAt": "2026-11-16T15:38:40.933Z",
   "engine": "panorama-cubemap-studio",
   "filter": "area",
   "faceSize": 512,
@@ -527,19 +527,19 @@
       "width": 2048,
       "height": 1024,
       "channels": 3,
-      "mse": 301.2456048870361,
-      "rmse": 17.35642834476714,
-      "mae": 6.110868545138146,
+      "mse": 301.3247753629401,
+      "rmse": 17.35870891981717,
+      "mae": 6.114760643410743,
       "maxAbs": 160.73269653320312,
-      "psnrDb": 23.341596415081618,
+      "psnrDb": 23.340455194001404,
       "pixelRmseMedian": 0,
-      "pixelRmseP95": 40.74404793667489,
-      "pixelRmseP99": 81.57399086322305
+      "pixelRmseP95": 40.7344424548264,
+      "pixelRmseP99": 81.56498301964506
     },
     "roundTripSolidAngle": {
-      "mse": 291.910716661228,
-      "rmse": 17.085394834806365,
-      "psnrDb": 23.47830321716134
+      "mse": 292.0077677634168,
+      "rmse": 17.088234776108877,
+      "psnrDb": 23.476859565019623
     },
     "vsAnalyticChart": [
       {

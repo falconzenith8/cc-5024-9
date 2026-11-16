@@ -71,6 +71,16 @@ h1 {
 .check { display: inline-flex; gap: 7px; align-items: center; font-size: 13px; cursor: pointer; }
 .check input { accent-color: var(--accent); }
 
+select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 6px 9px;
+  font-size: 13px;
+}
+select:disabled { opacity: 0.55; cursor: not-allowed; }
+
 .zoom-readout {
   margin-left: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -156,6 +166,31 @@ dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, mono
 
 .seam-notes { padding: 0 14px 14px; color: var(--muted); font-size: 12.5px; }
 .seam-notes p { margin: 0; line-height: 1.55; }
+
+.verify-body { padding: 12px 14px 14px; font-size: 12.5px; }
+.verify-status {
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+.verify-status.pass { border-color: #2f7d46; color: #9be3b1; }
+.verify-status.fail { border-color: #a8393c; color: #ffb3b5; }
+.verify-body dl { margin-bottom: 10px; }
+.run-button {
+  border: 1px solid var(--line);
+  background: #223249;
+  color: var(--text);
+  border-radius: 7px;
+  padding: 7px 11px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.run-button:hover { border-color: var(--accent); }
+.verify-note { margin: 10px 0 0; color: var(--muted); line-height: 1.5; }
 
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 

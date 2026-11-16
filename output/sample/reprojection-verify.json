@@ -1,0 +1,205 @@
+{
+  "format": "reprojection-verification",
+  "limits": {
+    "maxDirectionErrorDeg": 0.1,
+    "maxSeamExcess": 0.12,
+    "maxSeamPositionErrorDeg": 0.001
+  },
+  "measurements": [
+    {
+      "projection": "rectilinear",
+      "faceSize": 96,
+      "settings": {
+        "yaw": 0,
+        "pitch": 0,
+        "fovDeg": 75,
+        "probeWidth": 64,
+        "probeHeight": 36,
+        "seamWidth": 192,
+        "seamHeight": 108
+      },
+      "direction": {
+        "maxAngleDeg": 0.0018353496435084165,
+        "meanAngleDeg": 0.0010945188243770415,
+        "pixels": 2304
+      },
+      "seam": {
+        "maxNearEdgeErr": 0.003348301082951366,
+        "maxInteriorErr": 0.008632036625812134,
+        "excess": -0.005283735542860768,
+        "nearEdgeLimit": 0.96875
+      },
+      "seamPosition": {
+        "maxRoundTripDeg": 0.0000012074182697257333,
+        "points": 14
+      }
+    },
+    {
+      "projection": "rectilinear",
+      "faceSize": 96,
+      "settings": {
+        "yaw": 2.4,
+        "pitch": 0.7,
+        "fovDeg": 60,
+        "probeWidth": 64,
+        "probeHeight": 36,
+        "seamWidth": 192,
+        "seamHeight": 108
+      },
+      "direction": {
+        "maxAngleDeg": 0.002014511981764225,
+        "meanAngleDeg": 0.0012222089172776575,
+        "pixels": 2304
+      },
+      "seam": {
+        "maxNearEdgeErr": 0.0038550448778096325,
+        "maxInteriorErr": 0.00803365062103012,
+        "excess": -0.004178605743220487,
+        "nearEdgeLimit": 0.96875
+      },
+      "seamPosition": {
+        "maxRoundTripDeg": 0.0000012074182697257333,
+        "points": 15
+      }
+    },
+    {
+      "projection": "rectilinear",
+      "faceSize": 96,
+      "settings": {
+        "yaw": -1.1,
+        "pitch": -1.2,
+        "fovDeg": 110,
+        "probeWidth": 64,
+        "probeHeight": 36,
+        "seamWidth": 192,
+        "seamHeight": 108
+      },
+      "direction": {
+        "maxAngleDeg": 0.029127635528032613,
+        "meanAngleDeg": 0.001214530652645519,
+        "pixels": 2304
+      },
+      "seam": {
+        "maxNearEdgeErr": 0.043199678912571926,
+        "maxInteriorErr": 0.008623547595661307,
+        "excess": 0.03457613131691062,
+        "nearEdgeLimit": 0.96875
+      },
+      "seamPosition": {
+        "maxRoundTripDeg": 0.0000012074182697257333,
+        "points": 34
+      }
+    },
+    {
+      "projection": "equirectangular",
+      "faceSize": 96,
+      "settings": {
+        "yaw": 0,
+        "pitch": 0,
+        "fovDeg": 75,
+        "probeWidth": 64,
+        "probeHeight": 36,
+        "seamWidth": 192,
+        "seamHeight": 108
+      },
+      "direction": {
+        "maxAngleDeg": 0.0019956805119665014,
+        "meanAngleDeg": 0.0010887352672889641,
+        "pixels": 2304
+      },
+      "seam": {
+        "maxNearEdgeErr": 0.003580425797707676,
+        "maxInteriorErr": 0.008456267808384155,
+        "excess": -0.004875842010676479,
+        "nearEdgeLimit": 0.96875
+      },
+      "seamPosition": {
+        "maxRoundTripDeg": 0.0000012074182697257333,
+        "points": 108
+      }
+    },
+    {
+      "projection": "equirectangular",
+      "faceSize": 96,
+      "settings": {
+        "yaw": 2.4,
+        "pitch": 0.7,
+        "fovDeg": 60,
+        "probeWidth": 64,
+        "probeHeight": 36,
+        "seamWidth": 192,
+        "seamHeight": 108
+      },
+      "direction": {
+        "maxAngleDeg": 0.002015112545345722,
+        "meanAngleDeg": 0.000892817135902211,
+        "pixels": 2304
+      },
+      "seam": {
+        "maxNearEdgeErr": 0.0038539262089614112,
+        "maxInteriorErr": 0.0086822509765625,
+        "excess": -0.004828324767601089,
+        "nearEdgeLimit": 0.96875
+      },
+      "seamPosition": {
+        "maxRoundTripDeg": 0.0000012074182697257333,
+        "points": 108
+      }
+    },
+    {
+      "projection": "equirectangular",
+      "faceSize": 96,
+      "settings": {
+        "yaw": -1.1,
+        "pitch": -1.2,
+        "fovDeg": 110,
+        "probeWidth": 64,
+        "probeHeight": 36,
+        "seamWidth": 192,
+        "seamHeight": 108
+      },
+      "direction": {
+        "maxAngleDeg": 0.001993696198555179,
+        "meanAngleDeg": 0.0007226463213090275,
+        "pixels": 2304
+      },
+      "seam": {
+        "maxNearEdgeErr": 0.0033889837103231457,
+        "maxInteriorErr": 0.008678436279296875,
+        "excess": -0.005289452568973729,
+        "nearEdgeLimit": 0.96875
+      },
+      "seamPosition": {
+        "maxRoundTripDeg": 8.537736462515939e-7,
+        "points": 64
+      }
+    }
+  ],
+  "verdicts": [
+    {
+      "ok": true,
+      "reasons": []
+    },
+    {
+      "ok": true,
+      "reasons": []
+    },
+    {
+      "ok": true,
+      "reasons": []
+    },
+    {
+      "ok": true,
+      "reasons": []
+    },
+    {
+      "ok": true,
+      "reasons": []
+    },
+    {
+      "ok": true,
+      "reasons": []
+    }
+  ],
+  "ok": true
+}

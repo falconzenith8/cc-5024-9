@@ -1,0 +1,116 @@
+{
+  "format": "boundary-evidence",
+  "note": "Direction-known probes run against the pre-fix and repaired kernels. Zero/default values are real measurements, not placeholders.",
+  "probes": {
+    "poleQuadrant": "four longitude quadrants over a lit north cap, even N (pole on a texel corner)",
+    "polarCap": "only the first 8 north-cap rows lit; centre pole texel must see them (odd N)",
+    "smoothFieldRoundTrip": "analytic linear-in-direction field through equirect->cube->equirect",
+    "crossFaceSampling": "analytic linear-in-direction field sampled with sampleCubeDirection"
+  },
+  "before": {
+    "poleQuadrant": {
+      "rows": [
+        [
+          0,
+          0,
+          253.8,
+          0
+        ],
+        [
+          255,
+          0,
+          1.2,
+          0
+        ],
+        [
+          0,
+          255,
+          0,
+          1.2
+        ],
+        [
+          0,
+          0,
+          0,
+          253.8
+        ]
+      ],
+      "hotPerRow": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "maxLeak": 1.2
+    },
+    "polarCap": {
+      "faceSize": 17,
+      "rowsTop": 8,
+      "centreTexel": 0
+    },
+    "smoothFieldRoundTrip": {
+      "psnrDb": 80.15,
+      "mae": 0.015,
+      "maxAbs": 0.399,
+      "seamBandMax": 0.162,
+      "poleBandMax": 0.095
+    },
+    "crossFaceSampling": {
+      "analyticMaxErr": 0.692,
+      "nearEdgeMaxErr": 0.008
+    }
+  },
+  "after": {
+    "poleQuadrant": {
+      "rows": [
+        [
+          0,
+          0,
+          255,
+          0
+        ],
+        [
+          255,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          255,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          255
+        ]
+      ],
+      "hotPerRow": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "maxLeak": 0
+    },
+    "polarCap": {
+      "faceSize": 17,
+      "rowsTop": 8,
+      "centreTexel": 22.31
+    },
+    "smoothFieldRoundTrip": {
+      "psnrDb": 82.76,
+      "mae": 0.014,
+      "maxAbs": 0.162,
+      "seamBandMax": 0.162,
+      "poleBandMax": 0.096
+    },
+    "crossFaceSampling": {
+      "analyticMaxErr": 0.071,
+      "nearEdgeMaxErr": 0.008
+    }
+  }
+}

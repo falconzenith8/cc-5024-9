@@ -6,7 +6,7 @@ cubemap, and ships a browser viewer that locates the same direction in both.
 The pixels are genuinely resampled by projection — no view-only shader tricks
 and no hand-drawn placeholder faces.
 
-![Sphere view](output/screenshots/view-sphere.png)
+![Panorama reprojection view](output/screenshots/view-panorama.png)
 
 ## What it does
 
@@ -17,16 +17,61 @@ and no hand-drawn placeholder faces.
   a resampling step and is **explicitly lossy**; the loss is measured, not
   hidden.
 - **Viewer**: switch between the source equirectangular image, the stored cube
-  net, and a face-ownership direction map. Click any view to read longitude,
-  latitude, direction, source pixel and owning face pixel.
+  net, a face-ownership direction map, and a **panorama reprojection** view
+  that renders the stored faces through the same kernel `cube → equirect`
+  uses. Click any view to read longitude, latitude, direction, source pixel
+  and owning face pixel.
+
+## Panorama reprojection
+
+`src/reproject.js` is a shared, dependency-free kernel (Node and browser)
+that renders the cubemap under a selectable camera:
+
+- **Rectilinear** — pinhole camera; drag to rotate yaw/pitch, `fov` sets zoom.
+- **Equirectangular** — full 360×180 panorama; drag shifts longitude/latitude.
+
+Every output pixel becomes a unit direction and is sampled with
+`sampleCubeDirection` from `src/resample.js` — the repaired cross-face
+bilinear sampler. The UI therefore cannot show a picture that disagrees with
+the tested geometry. Cube seam lines are not drawn by hand: they are the 12
+edges from the geometry table, projected through the same camera model, and
+the dashboard reports the measured round-trip error of those positions.
+
+The verification panel is driven by the kernel. Entering the view, dragging
+the camera, or changing the projection re-runs `measureReprojection` and
+renders the absolute pass/fail. The metrics are direction error (a
+direction-encoded cubemap decoded back through the camera), seam difference
+(worst error within 1.5 texels of a cube edge minus the interior error), and
+seam position round-trip. Limits are absolute and tight enough to fail the
+pre-fix kernel; a non-finite or missing measurement is shown as **FAIL**, never
+substituted with a default.
+
+### Start the UI
+
+```sh
+npm run serve
+# open http://localhost:4173/web/  (static server, no build step)
+```
+
+Then click **Panorama reprojection**, drag to rotate, and use the
+**Reprojection** select to switch rectilinear/equirectangular. The
+**Reprojection verification** panel updates from the kernel. To check it
+headlessly instead:
+
+```sh
+npm run verify:reproject   # writes output/sample/reprojection-verify.json
+npm run verify:web         # Playwright: rotates the view, switches projection,
+                           # asserts the pixels and seams come from the kernel
+```
+
 
 ## Quick start
 
 ```sh
 npm run build:sample     # writes output/sample (chart, faces, metadata, metrics)
-npm test                 # 47 geometry / filtering / seam / round-trip tests
+npm test                 # 69 geometry / filtering / seam / boundary / reprojection tests
 npm run serve            # http://localhost:4173/web/
-npm run verify:web       # headless-browser acceptance checks
+npm run verify:web       # headless-browser acceptance checks (installs browser on first use)
 ```
 
 Convert your own panorama:
@@ -57,7 +102,45 @@ Full contract, formulas, filtering and measured loss: **[docs/MAPPING.md](docs/M
   texels that cover all longitudes are ring-averaged. Small footprints fall
   back to bilinear reconstruction.
 - cube → equirect supersamples each output pixel from the direction Jacobian
-  and blends both faces within one texel of an edge, removing visible seams.
+  and samples through an **extension-grid bilinear** stencil: taps that fall
+  outside a face are re-projected onto the neighbouring face, so the two
+  faces are blended by construction instead of masking the seam with a
+  copied edge pixel.
+
+### Boundary regressions
+
+Three real defects were reduced to minimal, direction-known reproductions and
+are now pinned by `test/boundary.test.mjs` (11 tests; three of them fail on
+the pre-fix kernel):
+
+1. **Even-`N` pole corner** — the pole-direction texel corner had a
+   degenerate longitude (`atan2(0,0)=0`), so per-vertex wrap folded a
+   quarter-ring wedge into a 90–180° span. Footprint polygons are now
+   unwrapped against the neighbouring non-polar vertices.
+2. **Polar-cap rows** — the sampled footprint started one latitude ring
+   inside the texel, dropping polar-cap rows including the pole row. The
+   footprint now extends to the pole for the `±Y` faces.
+3. **Cross-face step** — the old sampler only blended on the exact edge,
+   leaving a hard one-sided step (analytic max error 0.692 levels). The
+   extension-grid sampler reduced it to 0.071 without changing the seam
+   profile.
+
+The tests assert the repaired behaviour with absolute thresholds, not
+defaults: a missing or non-finite value fails rather than passing.
+`npm run evidence:boundary` re-runs the direction-known probes against the
+pre-fix snapshot in `test/fixtures/prefix-kernel` and the repaired kernel, and
+writes `output/sample/boundary-evidence.json`:
+
+| probe | pre-fix | repaired |
+| ----- | ------- | -------- |
+| even-N pole quadrant leakage | 1.2 levels | 0 |
+| odd-N polar-cap centre texel (rows 0–7 lit) | 0.00 | 22.31 |
+| cross-face analytic max error | 0.692 | 0.071 |
+| smooth round-trip max error | 0.399 | 0.162 |
+
+`output/sample/reprojection-prefix-failure.json` keeps the pre-fix panorama
+verification: all six runs fail the absolute limits (direction error up to
+0.29°, seam excess ≈0.31), while the repaired kernel passes all six.
 
 ## Measured loss (not byte-lossless)
 
@@ -75,15 +158,17 @@ measurement.
 ```
 src/geometry.js   world/equirect/face math, pixel centres, derived edge table
 src/resample.js   area and supersampled resampling, seam blending, metrics
+src/reproject.js  panorama camera + direction/seam verification kernel
 src/chart.js      calibration chart and analytic ground truth
 src/png.js        dependency-free PNG encode/decode
 src/net.js        foldable cube net derived from the edge table
 src/manifest.js   cubemap.json writer/reader
-bin/cli.mjs       conversion and sample-build commands
+bin/cli.mjs       conversion, sample-build and verify-reproject commands
 bin/serve.mjs     static server for the viewer
-web/              viewer (sphere / cube net / direction map)
-test/             test harness and suites
-scripts/          headless-browser acceptance checks
+web/              viewer (sphere / cube net / direction map / panorama)
+test/             test harness and suites (incl. boundary regressions)
+test/fixtures/    pre-fix kernel snapshot used only for before/after evidence
+scripts/          headless-browser acceptance checks, boundary evidence
 docs/MAPPING.md   mapping specification
-output/sample/    generated chart, six faces, metadata, metrics
+output/sample/    generated chart, six faces, metadata, metrics, verification
 ```

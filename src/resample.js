@@ -212,8 +212,15 @@ function clipPolygonY(poly, value, keepAbove) {
  * Projected equirect footprint of one face texel. The texel boundary is
  * sampled in direction space (8 points per edge), each sample mapped to
  * continuous source image coordinates and unwrapped across the +-180 seam.
- * The result is an ordered polygon; near a pole it legitimately spans a large
- * longitude range, which the caller handles as a full-width band.
+ *
+ * A boundary vertex that lies exactly on a pole has no longitude (its
+ * horizontal direction components are zero, so atan2 returns an arbitrary 0).
+ * Unwrapping such a vertex like any other would place the footprint apex at
+ * the wrong meridian and, for the four texels that meet at an even-N pole
+ * corner, fold the quarter-ring wedge into a bogus 90..180 degree span. We
+ * therefore drop the degenerate longitude and replace the polar vertex with
+ * the two adjacent boundary longitudes at the pole row, which is the true
+ * sector boundary in equirect space.
  */
 function texelFootprintPolygon(face, i, j, N, W, H) {
   const u = -1 + (2 * (i + 0.5)) / N;
@@ -224,7 +231,7 @@ function texelFootprintPolygon(face, i, j, N, W, H) {
   const cx = center.x;
   const cy = center.y;
   const K = 8;
-  const poly = [];
+  const samples = [];
   const corners = [
     [u - half, v - half],
     [u + half, v - half],
@@ -240,10 +247,39 @@ function texelFootprintPolygon(face, i, j, N, W, H) {
       const vv = a[1] + (b[1] - a[1]) * t;
       const d = faceDirUnitLocal(face, uu, vv);
       const p = dirToEquirectPixel(d[0], d[1], d[2], W, H);
-      poly.push({
+      samples.push({
         x: cx + mod(p.x - cx + W / 2, W) - W / 2,
         y: p.y,
+        polar: Math.hypot(d[0], d[2]) < 1e-12,
       });
+    }
+  }
+  const poly = [];
+  for (let k = 0; k < samples.length; k++) {
+    const s = samples[k];
+    if (!s.polar) {
+      poly.push(s);
+      continue;
+    }
+    // Replace the pole vertex with the longitudes of the nearest non-polar
+    // vertices on either side: the footprint boundary reaches the pole along
+    // two meridians, so in equirect space its top edge is the interval
+    // between them at y = 0.
+    let prev = null;
+    let next = null;
+    for (let d = 1; d < samples.length && prev === null; d++) {
+      const q = samples[(k - d + samples.length) % samples.length];
+      if (!q.polar) prev = q;
+    }
+    for (let d = 1; d < samples.length && next === null; d++) {
+      const q = samples[(k + d) % samples.length];
+      if (!q.polar) next = q;
+    }
+    if (prev && next) {
+      poly.push({ x: prev.x, y: s.y, polar: true });
+      poly.push({ x: next.x, y: s.y, polar: true });
+    } else {
+      poly.push({ x: cx, y: s.y, polar: true });
     }
   }
   let xMin = Infinity;
@@ -256,6 +292,18 @@ function texelFootprintPolygon(face, i, j, N, W, H) {
     if (p.y < yMin) yMin = p.y;
     if (p.y > yMax) yMax = p.y;
   }
+  // The +-Y texel that contains the pole direction covers all longitudes.
+  // For odd N the pole is the texel centre; for even N it is a shared
+  // corner and the four adjacent texels are quarter-ring wedges instead.
+  const ringRows = (face === 2 || face === 3) && Math.abs(u) < half && Math.abs(v) < half;
+  // A pole-containing texel covers every latitude between the pole and its
+  // lowest boundary row. The sampled boundary alone starts at the first
+  // latitude ring inside the texel, which would silently drop the polar cap
+  // rows (including the pole row itself) from the average.
+  if (ringRows) {
+    if (face === 2) yMin = 0;
+    else yMax = H;
+  }
   return {
     poly,
     cx,
@@ -264,10 +312,7 @@ function texelFootprintPolygon(face, i, j, N, W, H) {
     ySpan: yMax - yMin,
     yMin,
     yMax,
-    // The +-Y texel that contains the pole direction covers all longitudes.
-    // For odd N the pole is the texel centre; for even N it is a shared
-    // corner and the four adjacent texels are quarter-ring wedges instead.
-    ringRows: (face === 2 || face === 3) && Math.abs(u) < half && Math.abs(v) < half,
+    ringRows,
   };
 }
 
@@ -439,45 +484,69 @@ export function sampleFaceBilinear(faceImg, x, y) {
 }
 
 /**
- * Sample the cubemap for an arbitrary direction.
+ * Bilinear sample of the cubemap for an arbitrary direction.
  *
- * Near a face edge, bilinear sampling from the nearest owning face alone is
- * one-sided: it under-weights the neighbour across the seam. To keep the
- * cube surface continuous we blend the projections onto every face whose
- * coordinates are within one texel of the edge. Weights are the distance from
- * the edge (so exactly on the edge both faces contribute equally) and vanish
- * one texel in, where the owning face's bilinear support no longer reaches
- * across the seam.
+ * A face's bilinear stencil reaches half a texel beyond its border. Sampling
+ * only the owning face would clamp those taps to the border texel, which is
+ * one-sided and leaves a visible step at every cube edge. Instead each tap is
+ * evaluated where it physically lies: taps inside the owning face are its
+ * texels, and a tap that falls up to one texel outside is projected onto the
+ * face plane, re-owned by the neighbouring face through the same
+ * `dirToFaceUV` mapping and sampled there. The reconstructed surface is
+ * therefore the owning face's grid extended by a one-texel apron of its
+ * neighbours, which is continuous across every seam by construction.
  */
 export function sampleCubeDirection(faces, x, y, z) {
   const N = faces[0].width;
   const C = faces[0].channels;
-  const acc = new Array(C).fill(0);
-  let wSum = 0;
-  for (let face = 0; face < 6; face++) {
-    const f = FACES[face];
-    const denom = f.F[0] * x + f.F[1] * y + f.F[2] * z;
-    if (denom <= 0) continue;
-    const u = (f.R[0] * x + f.R[1] * y + f.R[2] * z) / denom;
-    const v = (f.D[0] * x + f.D[1] * y + f.D[2] * z) / denom;
-    const edgeDist = 1 - Math.max(Math.abs(u), Math.abs(v)); // >= 1 texel is too far
-    if (edgeDist < -1 / N) continue;
-    const w = Math.min(1 / N, Math.max(0, edgeDist)) + 1e-9;
-    const fx = ((u + 1) * N) / 2 - 0.5;
-    const fy = ((v + 1) * N) / 2 - 0.5;
-    const rgb = sampleFaceBilinear(faces[face], fx, fy);
-    for (let c = 0; c < C; c++) acc[c] += rgb[c] * w;
-    wSum += w;
+  const hit = dirToFaceUV(x, y, z);
+  const f = FACES[hit.face];
+  const denom = Math.max(f.F[0] * x + f.F[1] * y + f.F[2] * z, 1e-12);
+  const u = (f.R[0] * x + f.R[1] * y + f.R[2] * z) / denom;
+  const v = (f.D[0] * x + f.D[1] * y + f.D[2] * z) / denom;
+  const fx = ((u + 1) * N) / 2 - 0.5;
+  const fy = ((v + 1) * N) / 2 - 0.5;
+  const x0 = Math.floor(fx);
+  const y0 = Math.floor(fy);
+  const tx = fx - x0;
+  const ty = fy - y0;
+  const v00 = sampleTap(faces, hit.face, x0, y0);
+  const v10 = sampleTap(faces, hit.face, x0 + 1, y0);
+  const v01 = sampleTap(faces, hit.face, x0, y0 + 1);
+  const v11 = sampleTap(faces, hit.face, x0 + 1, y0 + 1);
+  const out = new Array(C);
+  for (let c = 0; c < C; c++) {
+    out[c] =
+      v00[c] * (1 - tx) * (1 - ty) +
+      v10[c] * tx * (1 - ty) +
+      v01[c] * (1 - tx) * ty +
+      v11[c] * tx * ty;
   }
-  if (wSum === 0) {
-    // Numerical fallback at an exact edge with degenerate weights.
-    const hit = dirToFaceUV(x, y, z);
-    const fx = ((hit.u + 1) * N) / 2 - 0.5;
-    const fy = ((hit.v + 1) * N) / 2 - 0.5;
-    return sampleFaceBilinear(faces[hit.face], fx, fy);
+  return out;
+}
+
+/**
+ * Value of one bilinear tap of `face`'s grid. Indices may be -1 or N, i.e. up
+ * to one texel outside the stored image; such a tap is mapped to the
+ * neighbouring face by direction, not clamped.
+ */
+function sampleTap(faces, face, i, j) {
+  const N = faces[0].width;
+  if (i >= 0 && i < N && j >= 0 && j < N) {
+    const img = faces[face];
+    const o = (j * N + i) * img.channels;
+    const out = new Array(img.channels);
+    for (let c = 0; c < img.channels; c++) out[c] = img.data[o + c];
+    return out;
   }
-  for (let c = 0; c < C; c++) acc[c] /= wSum;
-  return acc;
+  const u = -1 + (2 * (i + 0.5)) / N;
+  const v = -1 + (2 * (j + 0.5)) / N;
+  const dir = faceDirUnit(face, u, v);
+  const hit = dirToFaceUV(dir[0], dir[1], dir[2]);
+  const target = faces[hit.face];
+  const fx = ((hit.u + 1) * target.width) / 2 - 0.5;
+  const fy = ((hit.v + 1) * target.height) / 2 - 0.5;
+  return sampleFaceBilinear(target, fx, fy);
 }
 
 /**
