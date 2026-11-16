@@ -1,0 +1,48 @@
+{
+  "tiles": [
+    {
+      "face": 0,
+      "name": "+X",
+      "col": 2,
+      "row": 1,
+      "rot": 0
+    },
+    {
+      "face": 1,
+      "name": "-X",
+      "col": 0,
+      "row": 1,
+      "rot": 0
+    },
+    {
+      "face": 2,
+      "name": "+Y",
+      "col": 2,
+      "row": 0,
+      "rot": 90
+    },
+    {
+      "face": 3,
+      "name": "-Y",
+      "col": 2,
+      "row": 2,
+      "rot": 270
+    },
+    {
+      "face": 4,
+      "name": "+Z",
+      "col": 3,
+      "row": 1,
+      "rot": 0
+    },
+    {
+      "face": 5,
+      "name": "-Z",
+      "col": 1,
+      "row": 1,
+      "rot": 0
+    }
+  ],
+  "cols": 4,
+  "rows": 3
+}

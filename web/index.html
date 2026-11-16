@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Panorama Cubemap Studio</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Panorama Cubemap Studio</h1>
+      <p class="subtitle">
+        Equirectangular ⇄ cubemap computed per pixel. Click or drag any view to locate the same
+        direction in the source image and in the stored cube faces.
+      </p>
+    </header>
+
+    <section class="controls" aria-label="Viewer controls">
+      <div class="control-group">
+        <span class="label">View</span>
+        <div class="segmented" role="group" aria-label="Projection">
+          <button data-view="sphere" type="button" aria-pressed="true">Sphere (equirect)</button>
+          <button data-view="cube" type="button" aria-pressed="false">Cube net</button>
+          <button data-view="map" type="button" aria-pressed="false">Direction map</button>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="toggle-grid" checked /> Graticule</label>
+      <label class="check"><input type="checkbox" id="toggle-faces" checked /> Face edges</label>
+      <label class="check"><input type="checkbox" id="toggle-seams" /> Seam band</label>
+      <div class="zoom-readout" id="pixel-readout" aria-live="polite">
+        Move the pointer over the image to read pixel and direction.
+      </div>
+    </section>
+
+    <main>
+      <section class="canvas-panel">
+        <div class="panel-head">
+          <h2 id="main-title">Source equirectangular</h2>
+          <span id="main-meta" class="meta"></span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="main-canvas" width="1200" height="750"></canvas>
+        </div>
+        <p class="hint" id="view-hint"></p>
+      </section>
+
+      <aside>
+        <section class="canvas-panel">
+          <div class="panel-head">
+            <h2>Locator</h2>
+            <span class="meta" id="locator-meta"></span>
+          </div>
+          <div class="inspector-body">
+            <canvas id="inspector-canvas" width="240" height="240" aria-label="Source pixel neighbourhood"></canvas>
+            <dl>
+              <dt>Longitude</dt><dd id="loc-lon">—</dd>
+              <dt>Latitude</dt><dd id="loc-lat">—</dd>
+              <dt>Direction</dt><dd id="loc-dir">—</dd>
+              <dt>Source pixel</dt><dd id="loc-source">—</dd>
+              <dt>Source colour</dt><dd id="loc-src-color">—</dd>
+              <dt>Face / pixel</dt><dd id="loc-face">—</dd>
+              <dt>Face uv</dt><dd id="loc-uv">—</dd>
+              <dt>Face colour</dt><dd id="loc-face-color">—</dd>
+            </dl>
+          </div>
+        </section>
+
+        <section class="canvas-panel">
+          <div class="panel-head"><h2>Mapping facts</h2><span class="meta">from metadata</span></div>
+          <ul class="facts">
+            <li><span>World</span><span>+X right · +Y up · +Z forward</span></li>
+            <li><span>Equirect seam</span><span>column W−1 ↔ column 0, periodic</span></li>
+            <li><span>Cube edges</span><span>12 shared edges, no border pixels</span></li>
+            <li><span>Face rows</span><span>image down = a world down direction</span></li>
+            <li><span>Round trip</span><span id="fact-roundtrip">see roundtrip.json</span></li>
+          </ul>
+          <div class="seam-notes">
+            <p>
+              The Sphere view is the actual source PNG. The Cube net shows the six PNG files in
+              stored orientation; the Direction map colours each direction by the face that owns it.
+              No view uses a hand-drawn substitute for the projection.
+            </p>
+          </div>
+        </section>
+      </aside>
+    </main>
+
+    <footer>
+      <p>
+        Generated files: <span class="mono">output/sample/faces/*.png</span> and
+        <span class="mono">faces/cubemap.json</span>. Measured loss:
+        <span class="mono">roundtrip.json</span>. Documentation:
+        <span class="mono">docs/MAPPING.md</span>.
+      </p>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

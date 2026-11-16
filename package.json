@@ -1,0 +1,19 @@
+{
+  "name": "panorama-cubemap-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pixel-accurate equirectangular <-> cubemap converter with browser viewer",
+  "scripts": {
+    "test": "node test/run-tests.mjs",
+    "build:sample": "node bin/cli.mjs build-sample output/sample",
+    "serve": "node bin/serve.mjs",
+    "verify:web": "node scripts/verify-web.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1"
+  }
+}

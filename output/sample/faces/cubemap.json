@@ -1,0 +1,651 @@
+{
+  "version": 1,
+  "format": "cubemap-faces",
+  "direction": "equirect-to-cube",
+  "createdAt": "2026-11-16T06:00:08.833Z",
+  "engine": "panorama-cubemap-studio",
+  "filter": "area",
+  "faceSize": 512,
+  "source": {
+    "file": "chart-equirect.png",
+    "width": 2048,
+    "height": 1024,
+    "channels": 3
+  },
+  "files": [
+    {
+      "face": 0,
+      "name": "+X",
+      "file": "px.png"
+    },
+    {
+      "face": 1,
+      "name": "-X",
+      "file": "nx.png"
+    },
+    {
+      "face": 2,
+      "name": "+Y",
+      "file": "py.png"
+    },
+    {
+      "face": 3,
+      "name": "-Y",
+      "file": "ny.png"
+    },
+    {
+      "face": 4,
+      "name": "+Z",
+      "file": "pz.png"
+    },
+    {
+      "face": 5,
+      "name": "-Z",
+      "file": "nz.png"
+    }
+  ],
+  "mapping": {
+    "convention": "panorama-cubemap-studio/right-handed-outward-cameras",
+    "world": {
+      "axes": "+X right, +Y up, +Z forward (right-handed)",
+      "longitude": "theta = atan2(x, z), -pi..pi, column 0 at -pi",
+      "latitude": "phi = asin(y / |v|), -pi/2..pi/2, row 0 at +pi/2",
+      "equirectPixelCentre": "theta = -pi + 2*pi*(px+0.5)/W ; phi = +pi/2 - pi*(py+0.5)/H",
+      "seam": "longitude is periodic; column W-1 neighbours column 0"
+    },
+    "faceSize": 512,
+    "faceOrder": [
+      "+X",
+      "-X",
+      "+Y",
+      "-Y",
+      "+Z",
+      "-Z"
+    ],
+    "faces": [
+      {
+        "id": 0,
+        "name": "+X",
+        "file": "px.png",
+        "centreDirection": [
+          1,
+          0,
+          0
+        ],
+        "imageRightWorld": [
+          0,
+          0,
+          1
+        ],
+        "imageDownWorld": [
+          0,
+          -1,
+          0
+        ],
+        "handedness": "det(right, down, centre) = +1",
+        "orientation": "image is what an outward-looking camera at the origin sees; image right = imageRightWorld, image down = imageDownWorld",
+        "uvToDirection": "D = centre + u*imageRight + v*imageDown, (u,v) in [-1,1]; pixel (i,j) centre: u = -1 + 2*(i+0.5)/N, v = -1 + 2*(j+0.5)/N",
+        "pixelCentre": "continuous pixel index coordinates; integer i,j is the texel centre"
+      },
+      {
+        "id": 1,
+        "name": "-X",
+        "file": "nx.png",
+        "centreDirection": [
+          -1,
+          0,
+          0
+        ],
+        "imageRightWorld": [
+          0,
+          0,
+          -1
+        ],
+        "imageDownWorld": [
+          0,
+          -1,
+          0
+        ],
+        "handedness": "det(right, down, centre) = +1",
+        "orientation": "image is what an outward-looking camera at the origin sees; image right = imageRightWorld, image down = imageDownWorld",
+        "uvToDirection": "D = centre + u*imageRight + v*imageDown, (u,v) in [-1,1]; pixel (i,j) centre: u = -1 + 2*(i+0.5)/N, v = -1 + 2*(j+0.5)/N",
+        "pixelCentre": "continuous pixel index coordinates; integer i,j is the texel centre"
+      },
+      {
+        "id": 2,
+        "name": "+Y",
+        "file": "py.png",
+        "centreDirection": [
+          0,
+          1,
+          0
+        ],
+        "imageRightWorld": [
+          1,
+          0,
+          0
+        ],
+        "imageDownWorld": [
+          0,
+          0,
+          -1
+        ],
+        "handedness": "det(right, down, centre) = +1",
+        "orientation": "image is what an outward-looking camera at the origin sees; image right = imageRightWorld, image down = imageDownWorld",
+        "uvToDirection": "D = centre + u*imageRight + v*imageDown, (u,v) in [-1,1]; pixel (i,j) centre: u = -1 + 2*(i+0.5)/N, v = -1 + 2*(j+0.5)/N",
+        "pixelCentre": "continuous pixel index coordinates; integer i,j is the texel centre"
+      },
+      {
+        "id": 3,
+        "name": "-Y",
+        "file": "ny.png",
+        "centreDirection": [
+          0,
+          -1,
+          0
+        ],
+        "imageRightWorld": [
+          1,
+          0,
+          0
+        ],
+        "imageDownWorld": [
+          0,
+          0,
+          1
+        ],
+        "handedness": "det(right, down, centre) = +1",
+        "orientation": "image is what an outward-looking camera at the origin sees; image right = imageRightWorld, image down = imageDownWorld",
+        "uvToDirection": "D = centre + u*imageRight + v*imageDown, (u,v) in [-1,1]; pixel (i,j) centre: u = -1 + 2*(i+0.5)/N, v = -1 + 2*(j+0.5)/N",
+        "pixelCentre": "continuous pixel index coordinates; integer i,j is the texel centre"
+      },
+      {
+        "id": 4,
+        "name": "+Z",
+        "file": "pz.png",
+        "centreDirection": [
+          0,
+          0,
+          1
+        ],
+        "imageRightWorld": [
+          -1,
+          0,
+          0
+        ],
+        "imageDownWorld": [
+          0,
+          -1,
+          0
+        ],
+        "handedness": "det(right, down, centre) = +1",
+        "orientation": "image is what an outward-looking camera at the origin sees; image right = imageRightWorld, image down = imageDownWorld",
+        "uvToDirection": "D = centre + u*imageRight + v*imageDown, (u,v) in [-1,1]; pixel (i,j) centre: u = -1 + 2*(i+0.5)/N, v = -1 + 2*(j+0.5)/N",
+        "pixelCentre": "continuous pixel index coordinates; integer i,j is the texel centre"
+      },
+      {
+        "id": 5,
+        "name": "-Z",
+        "file": "nz.png",
+        "centreDirection": [
+          0,
+          0,
+          -1
+        ],
+        "imageRightWorld": [
+          1,
+          0,
+          0
+        ],
+        "imageDownWorld": [
+          0,
+          -1,
+          0
+        ],
+        "handedness": "det(right, down, centre) = +1",
+        "orientation": "image is what an outward-looking camera at the origin sees; image right = imageRightWorld, image down = imageDownWorld",
+        "uvToDirection": "D = centre + u*imageRight + v*imageDown, (u,v) in [-1,1]; pixel (i,j) centre: u = -1 + 2*(i+0.5)/N, v = -1 + 2*(j+0.5)/N",
+        "pixelCentre": "continuous pixel index coordinates; integer i,j is the texel centre"
+      }
+    ],
+    "edges": [
+      {
+        "face": 0,
+        "faceName": "+X",
+        "edge": "top",
+        "side": "v=-1",
+        "neighbor": 2,
+        "neighborName": "+Y",
+        "neighborEdge": "right",
+        "neighborSide": "u=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 0,
+        "faceName": "+X",
+        "edge": "right",
+        "side": "u=+1",
+        "neighbor": 4,
+        "neighborName": "+Z",
+        "neighborEdge": "left",
+        "neighborSide": "u=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 0,
+        "faceName": "+X",
+        "edge": "bottom",
+        "side": "v=+1",
+        "neighbor": 3,
+        "neighborName": "-Y",
+        "neighborEdge": "right",
+        "neighborSide": "u=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 0,
+        "faceName": "+X",
+        "edge": "left",
+        "side": "u=-1",
+        "neighbor": 5,
+        "neighborName": "-Z",
+        "neighborEdge": "right",
+        "neighborSide": "u=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 1,
+        "faceName": "-X",
+        "edge": "top",
+        "side": "v=-1",
+        "neighbor": 2,
+        "neighborName": "+Y",
+        "neighborEdge": "left",
+        "neighborSide": "u=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 1,
+        "faceName": "-X",
+        "edge": "right",
+        "side": "u=+1",
+        "neighbor": 5,
+        "neighborName": "-Z",
+        "neighborEdge": "left",
+        "neighborSide": "u=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 1,
+        "faceName": "-X",
+        "edge": "bottom",
+        "side": "v=+1",
+        "neighbor": 3,
+        "neighborName": "-Y",
+        "neighborEdge": "left",
+        "neighborSide": "u=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 1,
+        "faceName": "-X",
+        "edge": "left",
+        "side": "u=-1",
+        "neighbor": 4,
+        "neighborName": "+Z",
+        "neighborEdge": "right",
+        "neighborSide": "u=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 2,
+        "faceName": "+Y",
+        "edge": "top",
+        "side": "v=-1",
+        "neighbor": 4,
+        "neighborName": "+Z",
+        "neighborEdge": "top",
+        "neighborSide": "v=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 2,
+        "faceName": "+Y",
+        "edge": "right",
+        "side": "u=+1",
+        "neighbor": 0,
+        "neighborName": "+X",
+        "neighborEdge": "top",
+        "neighborSide": "v=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 2,
+        "faceName": "+Y",
+        "edge": "bottom",
+        "side": "v=+1",
+        "neighbor": 5,
+        "neighborName": "-Z",
+        "neighborEdge": "top",
+        "neighborSide": "v=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 2,
+        "faceName": "+Y",
+        "edge": "left",
+        "side": "u=-1",
+        "neighbor": 1,
+        "neighborName": "-X",
+        "neighborEdge": "top",
+        "neighborSide": "v=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 3,
+        "faceName": "-Y",
+        "edge": "top",
+        "side": "v=-1",
+        "neighbor": 5,
+        "neighborName": "-Z",
+        "neighborEdge": "bottom",
+        "neighborSide": "v=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 3,
+        "faceName": "-Y",
+        "edge": "right",
+        "side": "u=+1",
+        "neighbor": 0,
+        "neighborName": "+X",
+        "neighborEdge": "bottom",
+        "neighborSide": "v=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 3,
+        "faceName": "-Y",
+        "edge": "bottom",
+        "side": "v=+1",
+        "neighbor": 4,
+        "neighborName": "+Z",
+        "neighborEdge": "bottom",
+        "neighborSide": "v=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 3,
+        "faceName": "-Y",
+        "edge": "left",
+        "side": "u=-1",
+        "neighbor": 1,
+        "neighborName": "-X",
+        "neighborEdge": "bottom",
+        "neighborSide": "v=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 4,
+        "faceName": "+Z",
+        "edge": "top",
+        "side": "v=-1",
+        "neighbor": 2,
+        "neighborName": "+Y",
+        "neighborEdge": "top",
+        "neighborSide": "v=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 4,
+        "faceName": "+Z",
+        "edge": "right",
+        "side": "u=+1",
+        "neighbor": 1,
+        "neighborName": "-X",
+        "neighborEdge": "left",
+        "neighborSide": "u=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 4,
+        "faceName": "+Z",
+        "edge": "bottom",
+        "side": "v=+1",
+        "neighbor": 3,
+        "neighborName": "-Y",
+        "neighborEdge": "bottom",
+        "neighborSide": "v=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 4,
+        "faceName": "+Z",
+        "edge": "left",
+        "side": "u=-1",
+        "neighbor": 0,
+        "neighborName": "+X",
+        "neighborEdge": "right",
+        "neighborSide": "u=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 5,
+        "faceName": "-Z",
+        "edge": "top",
+        "side": "v=-1",
+        "neighbor": 2,
+        "neighborName": "+Y",
+        "neighborEdge": "bottom",
+        "neighborSide": "v=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 5,
+        "faceName": "-Z",
+        "edge": "right",
+        "side": "u=+1",
+        "neighbor": 0,
+        "neighborName": "+X",
+        "neighborEdge": "left",
+        "neighborSide": "u=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 5,
+        "faceName": "-Z",
+        "edge": "bottom",
+        "side": "v=+1",
+        "neighbor": 3,
+        "neighborName": "-Y",
+        "neighborEdge": "top",
+        "neighborSide": "v=-1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      },
+      {
+        "face": 5,
+        "faceName": "-Z",
+        "edge": "left",
+        "side": "u=-1",
+        "neighbor": 1,
+        "neighborName": "-X",
+        "neighborEdge": "right",
+        "neighborSide": "u=+1",
+        "traversal": "opposite",
+        "note": "traversal is along each face edge in its image order (top L->R, right T->B, bottom R->L, left B->T); opposite is the correct cube-net orientation"
+      }
+    ],
+    "edgeSideBasis": {
+      "top": "v=-1",
+      "right": "u=+1",
+      "bottom": "v=+1",
+      "left": "u=-1"
+    },
+    "seamPolicy": {
+      "equirectHorizontal": "periodic, sampled with wrap-around; no black border",
+      "equirectPoles": "clamped to the last row (half-texel polar caps)",
+      "cubeEdges": "shared by geometry; no separate border pixels"
+    },
+    "filtering": {
+      "dtype": "uint8 encoded values",
+      "linearLight": false,
+      "equirectToCube": "area integration of the exact projected footprint per face texel; longitude intervals are periodic, latitude bands use exact spherical solid angle; degenerate near-unit footprints use bilinear reconstruction",
+      "cubeToEquirect": "stratified direction supersampling sized from the direction Jacobian; samples within one texel of a face edge blend both faces to avoid seams",
+      "kernel": "box (per-texel footprint)"
+    },
+    "notes": [
+      "All faces are generated by projection; no face is hand-drawn.",
+      "No face is vertically flipped: image down is a world-space down component for every face.",
+      "Cube->equirect is a resampling operation and is not byte-lossless."
+    ]
+  },
+  "metrics": {
+    "roundTrip": {
+      "width": 2048,
+      "height": 1024,
+      "channels": 3,
+      "mse": 301.2456048870361,
+      "rmse": 17.35642834476714,
+      "mae": 6.110868545138146,
+      "maxAbs": 160.73269653320312,
+      "psnrDb": 23.341596415081618,
+      "pixelRmseMedian": 0,
+      "pixelRmseP95": 40.74404793667489,
+      "pixelRmseP99": 81.57399086322305
+    },
+    "roundTripSolidAngle": {
+      "mse": 291.910716661228,
+      "rmse": 17.085394834806365,
+      "psnrDb": 23.47830321716134
+    },
+    "vsAnalyticChart": [
+      {
+        "face": 0,
+        "name": "+X",
+        "vsAnalyticChart": {
+          "width": 512,
+          "height": 512,
+          "channels": 3,
+          "mse": 151.245925438887,
+          "rmse": 12.29820822066723,
+          "mae": 2.3724880455993116,
+          "maxAbs": 227.91378784179688,
+          "psnrDb": 26.33396677267326,
+          "pixelRmseMedian": 0.5553697411431989,
+          "pixelRmseP95": 5.475823379208075,
+          "pixelRmseP99": 55.96316392067362
+        }
+      },
+      {
+        "face": 1,
+        "name": "-X",
+        "vsAnalyticChart": {
+          "width": 512,
+          "height": 512,
+          "channels": 3,
+          "mse": 156.76532751672167,
+          "rmse": 12.520596132641675,
+          "mae": 2.4192690775865535,
+          "maxAbs": 224.94642639160156,
+          "psnrDb": 26.178303467367662,
+          "pixelRmseMedian": 0.5544122498119018,
+          "pixelRmseP95": 5.667760003508586,
+          "pixelRmseP99": 57.234163149880814
+        }
+      },
+      {
+        "face": 2,
+        "name": "+Y",
+        "vsAnalyticChart": {
+          "width": 512,
+          "height": 512,
+          "channels": 3,
+          "mse": 1486.6794751600612,
+          "rmse": 38.557482738893384,
+          "mae": 15.17837577664371,
+          "maxAbs": 236,
+          "psnrDb": 16.408630151933412,
+          "pixelRmseMedian": 0.44256965199369525,
+          "pixelRmseP95": 98.88497691015215,
+          "pixelRmseP99": 168.1172765347048
+        }
+      },
+      {
+        "face": 3,
+        "name": "-Y",
+        "vsAnalyticChart": {
+          "width": 512,
+          "height": 512,
+          "channels": 3,
+          "mse": 1468.558636979512,
+          "rmse": 38.321777581154976,
+          "mae": 14.920775140765423,
+          "maxAbs": 234.55064392089844,
+          "psnrDb": 16.461890690433236,
+          "pixelRmseMedian": 0.40722157804894293,
+          "pixelRmseP95": 98.73088943578621,
+          "pixelRmseP99": 167.84403766741715
+        }
+      },
+      {
+        "face": 4,
+        "name": "+Z",
+        "vsAnalyticChart": {
+          "width": 512,
+          "height": 512,
+          "channels": 3,
+          "mse": 129.2624454433532,
+          "rmse": 11.3693643376995,
+          "mae": 2.2477416315183896,
+          "maxAbs": 227.91378784179688,
+          "psnrDb": 27.016079930310013,
+          "pixelRmseMedian": 0.5560234617124158,
+          "pixelRmseP95": 5.596616440053603,
+          "pixelRmseP99": 51.31349457625282
+        }
+      },
+      {
+        "face": 5,
+        "name": "-Z",
+        "vsAnalyticChart": {
+          "width": 512,
+          "height": 512,
+          "channels": 3,
+          "mse": 175.35122319848634,
+          "rmse": 13.242024890419378,
+          "mae": 2.5466202473883945,
+          "maxAbs": 232.39463806152344,
+          "psnrDb": 25.691715611294306,
+          "pixelRmseMedian": 0.5547206085525681,
+          "pixelRmseP95": 5.879540578972137,
+          "pixelRmseP99": 59.7377769467914
+        }
+      }
+    ],
+    "note": "Round-trip loss is real: the cube->equirect pass integrates over cube texels, so high-frequency detail above the cube rate is removed. No byte-for-byte identity is claimed."
+  },
+  "elapsedMs": null
+}
